@@ -3,9 +3,10 @@ var express = require('express');
 var path = require('path');
 
 // Additional dependencies
-
+ 
 /// Environment variables
 require( 'dotenv' ).config( {path: __dirname + '/.env' } );
+const _ = require('lodash');
 
 /// To parse POST
 var bodyParser = require('body-parser');
