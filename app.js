@@ -1,40 +1,48 @@
 // Express generated dependencies
 var express = require('express');
 var path = require('path');
+const request = require('request-promise-native');
+const hubspot = require('@hubspot/api-client');
+const NodeCache = require('node-cache');
+const session = require('express-session');
+const opn = require('open');
 
 // Additional dependencies
- 
+
 /// Environment variables
-require( 'dotenv' ).config( {path: __dirname + '/.env' } );
+require('dotenv').config()// {path: __dirname + '/.env' } );
 const _ = require('lodash');
 
 /// To parse POST
 var bodyParser = require('body-parser');
 var multer = require('multer');
 var upload = multer();
+const PRIVATE_ACCESS_TOKEN = process.env.PRIVATE_ACCESS_TOKEN;
+const SERVER_URL = process.env.SERVER_URL;
+
 
 var app = express();
 
 // [1.9.0+] For Heroku instances, they should return a response within 30 seconds to avoid getting stuck with the 503 error.
-if ( process.env.WPD_TIMEOUT ) {
-  var ms = require( 'ms' );
+if (process.env.WPD_TIMEOUT) {
+  var ms = require('ms');
   _timeout = '' + process.env.WPD_TIMEOUT;
-  app.set( 'connectionTimeout', ms( _timeout ) );
-  var timeout = require( 'connect-timeout' ); // @see https://github.com/expressjs/timeout
-  app.use( timeout( _timeout ) );
+  app.set('connectionTimeout', ms(_timeout));
+  var timeout = require('connect-timeout'); // @see https://github.com/expressjs/timeout
+  app.use(timeout(_timeout));
 }
 
-var compression = require( 'compression' );
+var compression = require('compression');
 app.use(compression({}));
-app.enable( 'trust proxy' );  // for Heroku environments to detect whether the scheme is https or not.
+app.enable('trust proxy');  // for Heroku environments to detect whether the scheme is https or not.
 
 // Custom Data
-app.set( 'config', require( './config/project' ) );
+app.set('config', require('./config/project'));
 
 /// Temporary directories
 const tempDirectory = require('temp-dir');
-const tempDirPath   = tempDirectory + path.sep + 'web-page-dumper';
-require( './app/temp-dirs' )( app, tempDirPath );
+const tempDirPath = tempDirectory + path.sep + 'web-page-dumper';
+require('./app/temp-dirs')(app, tempDirPath);
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -42,7 +50,7 @@ app.set('view engine', 'pug');
 
 // Logger
 /// Morgan
-require( './app/log/loggerWinstonForMorgan.js' )( app, tempDirPath );
+require('./app/log/loggerWinstonForMorgan.js')(app, tempDirPath);
 /// Browser Activities
 /// Debug Memory Leaks
 
@@ -65,19 +73,262 @@ app.use(upload.array());
 app.use(express.static('public'));
 
 // Custom properties
-const Debug = require( './utility/debug.js' );
+const Debug = require('./utility/debug.js');
 app.use(function (req, res, next) {
   req.debug = new Debug;
   next();
 });
 
+app.get('/contact', async (req, res) => {
+  //res.setHeader('Content-Type', 'text/html');
+  //res.write(`<h2>HubSpot PdfConvert App</h2>`);
+  console.log(PRIVATE_ACCESS_TOKEN)
+  const contact = await getContact(_.get(req, "query.email"));
+  //res.write(`<h4>Access token: ${accessToken}</h4>`);
+  res.json(contact)//displayContactName(res, contact);
+  res.end();
+});
+
+app.get('/init', async (req, res) => {
+  console.log('/init req.query', req.query);
+  res.setHeader('Content-Type', 'text/html');
+  if (PRIVATE_ACCESS_TOKEN) {
+    const init = await initCompany()
+    res.write(`<h4> Done initial PDFConvert setup</h4>`);
+  }
+  else
+  res.write(`<h4> Error initial PDFConvert setup</h4>`);
+  res.end();
+});
+
+app.get('/assign_pdf', async (req, res) => {
+  console.log('/assign_pdf req.query', req.query);
+  //res.setHeader('Content-Type', 'text/html');
+  let clientid = _.get(req, "query.vid")
+  let email = _.get(req, "query.email")
+  let template_url = _.get(req, "query.template")
+  if (PRIVATE_ACCESS_TOKEN) {
+    const clientid = await getContact(email)
+    if (clientid > 0) {
+      const folder = await createContactFolder(clientid)
+      const file = await getPdf(template_url, email)
+      const fileUrl = await uploadFile(clientid, file)
+      const result2 = await cacheContactsCard(clientid, fileUrl);
+      res.json({
+        "message": "Pdf created succesfully!",
+        "pdf": fileUrl
+      })
+    }
+    else
+      res.status(404).send({
+        "message": "Error! Contact does't exists!"
+      });
+    //res.write(`<h4>Un-assigned Creditsafe profile to Company: ${req.query.company_id}</h4>`);
+  } else {
+    console.error(`       > Error for assign_company`);
+    res.status(404).send({
+      "message": "Error! Please contact developer!"
+    });
+    //res.write(`<h4>ERROR on try to assign Creditsafe profile to Company: ${req.query.company_id}</h4>`);
+  }
+  res.end();
+});
+
 // Routers
-require( './routes/_route' )( app );
+require('./routes/_route')(app);
 
 // Error handler
-require( './app/errorHandler.js' )( app, tempDirPath );
+require('./app/errorHandler.js')(app, tempDirPath);
 
 // Periodical routines.
-require( './tasks/cleanUserData' )( app.get( 'pathDirTempUserData' ) );
+require('./tasks/cleanUserData')(app.get('pathDirTempUserData'));
+
+//Hubspot
+
+const cacheContactsCard = async (clientId, card_json) => {
+  console.log('=== Cache contacts for HubSpot using the access token ===');
+
+  try {
+    const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
+    const response = await hubspotClient.apiRequest({
+      method: 'patch',
+      path: '/crm/v3/objects/contacts/' + clientId,
+      body: {
+        "properties": {
+          "df_generated_pdf": card_json
+        }
+      }
+    })
+    console.log(JSON.stringify(response, null, 2));
+  } catch (e) {
+    e.message === 'HTTP request failed'
+      ? console.error(JSON.stringify(e.response, null, 2))
+      : console.error(e)
+  }
+
+
+  return true;
+};
+
+const getContact = async (email) => {
+  console.log('=== Retrieving a contact from HubSpot using the access token ===');
+  let id = 0
+  try {
+    const headers = {
+      Authorization: `Bearer ${PRIVATE_ACCESS_TOKEN}`,
+      'Content-Type': 'application/json'
+    };
+    console.log('===> Replace the following request.get() to test other API calls');
+    console.log('===> request.get(\'https://api.hubapi.com/contacts/v1/lists/all/contacts/all?count=1\')');
+    const result = await request.get(`https://api.hubapi.com/crm/v3/objects/contacts/${email}?idProperty=email`, {
+      headers: headers
+    });
+    id = _.get(JSON.parse(result), "id") || 0 // return JSON.parse(result).contacts[0];
+    console.log("getContact id:", id);
+  } catch (e) {
+    console.error('  > Unable to retrieve contact');
+    return e.response?.body;
+  }
+  return id;
+};
+
+const getPdf = async (url, email) => {
+  console.log('=== Retrieving a pdf');
+  let pdf;
+  try {
+    http://localhost:3000/www/?url=https://demohubspot.smartworkers.nl/pdf-template-test1700222658&output=pdf
+    console.log(`${SERVER_URL}/www/?output=pdf&url=` + encodeURIComponent(`${url}?email=${email}`));
+    const result = await request.get(`${SERVER_URL}/www/?output=pdf&url=` + encodeURIComponent(`${url}?email=${encodeURIComponent(email)}`), {
+      encoding: null
+      //headers: headers
+    });
+    pdf = result
+    //console.log("getPDF:", pdf);
+  } catch (e) {
+    console.error('  > Unable to retrieve pdf');
+    return e.response?.body;
+  }
+  return pdf
+};
+
+const displayContactName = (res, contact) => {
+  if (contact?.status === 'error') {
+    res.write(`<p>Unable to retrieve contact! Error Message: ${contact.message}</p>`);
+    return;
+  }
+  const { firstname, lastname } = contact.properties;
+  res.write(`<p>Contact name: ${firstname.value} ${lastname.value}</p>`);
+};
+
+const createContactFolder = async (clientid) => {
+  try {
+    const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
+    const FolderInput = { parentPath: "pdf", name: `${clientid}` };
+    const apiResponse = await hubspotClient.files.foldersApi.create(FolderInput);
+    console.log(JSON.stringify(apiResponse, null, 2));
+  } catch (e) {
+    e.message === 'HTTP request failed'
+      ? console.error(JSON.stringify(e.response, null, 2))
+      : console.error(e)
+  }
+}
+
+const initCompany = async () => {
+  try {
+    const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
+    const FolderInput = { name: `pdf` };
+    const apiResponse = await hubspotClient.files.foldersApi.create(FolderInput);
+
+    const PropertyGroupCreate = { name: "pdf", label: "pdf" };
+    const objectType = "contact";
+
+    apiResponse = await hubspotClient.crm.properties.groupsApi.create(objectType, PropertyGroupCreate);
+    console.log(`createPropertyGroup`)
+
+    const BatchInputPropertyCreate = { inputs: [{ "label": "DF Generated Pdf", "type": "string", "fieldType": "text", "groupName": "pdf", "hidden": false, "hasUniqueValue": false, "formField": false, "options": [], "name": "df_generated_pdf" }] };
+
+    apiResponse = await hubspotClient.crm.properties.batchApi.create(objectType, BatchInputPropertyCreate);
+
+    console.log(`createProperty`)
+
+    console.log(JSON.stringify(apiResponse, null, 2));
+  } catch (e) {
+    e.message === 'HTTP request failed'
+      ? console.error(JSON.stringify(e.response, null, 2))
+      : console.error(e)
+  }
+}
+
+const uploadFile = async (clientid, file) => {
+  let url = ""
+  try {
+    let filename = makeid(10) + ".pdf";
+    const myBuffer = Buffer.from('Hello, world!');
+    const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
+    //const fileInput = { parentPath: "pdf", name: `${clientid}` };
+    const response = await hubspotClient.files.filesApi.upload(
+      {
+        data: file, //myBuffer,//fs.createReadStream('./photo.jpg'),
+        name: filename
+      },
+      undefined,
+      `/pdf/${clientid}`,
+      filename,
+      undefined,
+      JSON.stringify({
+        access: 'PUBLIC_NOT_INDEXABLE',
+        overwrite: true,
+        duplicateValidationStrategy: 'NONE',
+        duplicateValidationScope: 'ENTIRE_PORTAL',
+      })
+    )
+    console.log(JSON.stringify(response, null, 2));
+    url = _.get(response, "url")
+  } catch (e) {
+    e.message === 'HTTP request failed'
+      ? console.error(JSON.stringify(e.response, null, 2))
+      : console.error(e)
+  }
+  console.log("url", url)
+  return url;
+}
+
+const getContactId = async (email) => {
+  console.log('=== Get contacts for HubSpot using the access token ===', email);
+  let id = 0
+  try {
+    const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
+    const response = await hubspotClient.apiRequest({
+      method: 'get',
+      path: '/crm/v3/objects/contacts/bhofman@ilionx.com?idProperty=email'
+      //path: '/crm/v3/objects/contacts/' + email +"?idProperty=email",
+    })
+    console.log(JSON.stringify(response, null, 2));
+    id = _.get(response, "id") || 0
+  } catch (e) {
+    e.message === 'HTTP request failed'
+      ? console.error(JSON.stringify(e.response, null, 2))
+      : console.error(e)
+  }
+  return id;
+};
+
+
+function makeid(length) {
+  length = length || 10
+  let result = '';
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const charactersLength = characters.length;
+  let counter = 0;
+  while (counter < length) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    counter += 1;
+  }
+  return result;
+}
+
+console.log(makeid(5));
+
 
 module.exports = app;
+
