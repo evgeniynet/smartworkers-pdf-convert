@@ -24,7 +24,7 @@ module.exports = function( app ) {
   // var usersRouter = require('./users'); // @deprecated
 
   // Favicon
-  app.use( favicon( path.join( path.dirname( __dirname ), 'public', 'images', 'favicon.svg' ) ) );
+  //app.use( favicon( path.join( path.dirname( __dirname ), 'public', 'images', 'favicon.svg' ) ) );
 
 }
 
