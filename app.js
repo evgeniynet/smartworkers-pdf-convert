@@ -17,9 +17,8 @@ const _ = require('lodash');
 var bodyParser = require('body-parser');
 var multer = require('multer');
 var upload = multer();
-const PRIVATE_ACCESS_TOKEN = process.env.PRIVATE_ACCESS_TOKEN;
+const TOKENS = {"24267080": process.env.PRIVATE_ACCESS_TOKEN_24267080, "27172026": process.env.PRIVATE_ACCESS_TOKEN_27172026} ;
 const SERVER_URL = process.env.SERVER_URL;
-
 
 var app = express();
 
@@ -82,8 +81,9 @@ app.use(function (req, res, next) {
 app.get('/contact', async (req, res) => {
   //res.setHeader('Content-Type', 'text/html');
   //res.write(`<h2>HubSpot PdfConvert App</h2>`);
-  console.log(PRIVATE_ACCESS_TOKEN)
-  const contact = await getContact(_.get(req, "query.email"));
+  const company_id= _.get(req, "query.company_id")
+  const PRIVATE_ACCESS_TOKEN = TOKENS[company_id] || TOKENS["24267080"]
+  const contact = await getContact(PRIVATE_ACCESS_TOKEN, _.get(req, "query.email"));
   //res.write(`<h4>Access token: ${accessToken}</h4>`);
   res.json(contact)//displayContactName(res, contact);
   res.end();
@@ -92,12 +92,14 @@ app.get('/contact', async (req, res) => {
 app.get('/init', async (req, res) => {
   console.log('/init req.query', req.query);
   res.setHeader('Content-Type', 'text/html');
-  if (PRIVATE_ACCESS_TOKEN) {
-    const init = await initCompany()
+  const company_id= _.get(req, "query.company_id")
+  const PRIVATE_ACCESS_TOKEN = TOKENS[company_id] || TOKENS["24267080"]
+  if (PRIVATE_ACCESS_TOKEN) { 
+    const init = await initCompany(PRIVATE_ACCESS_TOKEN)
     res.write(`<h4> Done initial PDFConvert setup</h4>`);
   }
   else
-  res.write(`<h4> Error initial PDFConvert setup</h4>`);
+    res.write(`<h4> Error initial PDFConvert setup</h4>`);
   res.end();
 });
 
@@ -107,13 +109,25 @@ app.get('/assign_pdf', async (req, res) => {
   let clientid = _.get(req, "query.vid")
   let email = _.get(req, "query.email")
   let template_url = _.get(req, "query.template")
+  const company_id= _.get(req, "query.company_id")
+  const PRIVATE_ACCESS_TOKEN = TOKENS[company_id] || TOKENS["24267080"]
   if (PRIVATE_ACCESS_TOKEN) {
-    const clientid = await getContact(email)
+    const clientid = await getContact(PRIVATE_ACCESS_TOKEN, email)
     if (clientid > 0) {
-      const folder = await createContactFolder(clientid)
+      const folder = await createContactFolder(PRIVATE_ACCESS_TOKEN, clientid)
       const file = await getPdf(template_url, email)
-      const fileUrl = await uploadFile(clientid, file)
-      const result2 = await cacheContactsCard(clientid, fileUrl);
+
+      let t = new URL(template_url).pathname;
+      t= t.substring(0)//, t.length - 10)
+      let date = new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-")
+      let filename = `${t}-${date}.pdf`;
+
+      const fileObject = await uploadFile(PRIVATE_ACCESS_TOKEN, clientid, file, filename)
+      const fileUrl = _.get(fileObject, "url")
+      const file_id = _.get(fileObject, "file_id")
+
+      const note = await addAttachmentNote(PRIVATE_ACCESS_TOKEN, clientid, file_id)
+      const result2 = await cacheContactsCard(PRIVATE_ACCESS_TOKEN, clientid, fileUrl);
       res.json({
         "message": "Pdf created succesfully!",
         "pdf": fileUrl
@@ -145,7 +159,7 @@ require('./tasks/cleanUserData')(app.get('pathDirTempUserData'));
 
 //Hubspot
 
-const cacheContactsCard = async (clientId, card_json) => {
+const cacheContactsCard = async (PRIVATE_ACCESS_TOKEN, clientId, card_json) => {
   console.log('=== Cache contacts for HubSpot using the access token ===');
 
   try {
@@ -170,7 +184,46 @@ const cacheContactsCard = async (clientId, card_json) => {
   return true;
 };
 
-const getContact = async (email) => {
+const addAttachmentNote = async (PRIVATE_ACCESS_TOKEN, clientId, file_id) => {
+  console.log('=== addAttachmentNote for HubSpot using the access token ===');
+
+  try {
+    const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
+    const response = await hubspotClient.apiRequest({
+      method: 'post',
+      path: '/crm/v3/objects/notes',
+      body: {
+        "properties": {
+          "hs_timestamp": new Date().toISOString(),
+          "hs_attachment_ids": file_id
+        },
+        "associations": [
+          {
+            "to": {
+              "id": clientId
+            },
+            "types": [
+              {
+                "associationCategory": "HUBSPOT_DEFINED",
+                "associationTypeId": 10
+              }
+            ]
+          }
+        ]
+      }
+    })
+    console.log(JSON.stringify(response, null, 2));
+  } catch (e) {
+    e.message === 'HTTP request failed'
+      ? console.error(JSON.stringify(e.response, null, 2))
+      : console.error(e)
+  }
+
+
+  return true;
+};
+
+const getContact = async (PRIVATE_ACCESS_TOKEN, email) => {
   console.log('=== Retrieving a contact from HubSpot using the access token ===');
   let id = 0
   try {
@@ -197,6 +250,7 @@ const getPdf = async (url, email) => {
   let pdf;
   try {
     http://localhost:3000/www/?url=https://demohubspot.smartworkers.nl/pdf-template-test1700222658&output=pdf
+    //http://localhost:3000/www/?url=https%3A%2F%2Fdemohubspot.smartworkers.nl%2Fpdf-template-test1700222658%3Fhs_preview%3DMEPmxTzR-145897991339%26email%3Dbhofman%2540ilionx.com&output=pdf
     console.log(`${SERVER_URL}/www/?output=pdf&url=` + encodeURIComponent(`${url}?email=${email}`));
     const result = await request.get(`${SERVER_URL}/www/?output=pdf&url=` + encodeURIComponent(`${url}?email=${encodeURIComponent(email)}`), {
       encoding: null
@@ -220,7 +274,7 @@ const displayContactName = (res, contact) => {
   res.write(`<p>Contact name: ${firstname.value} ${lastname.value}</p>`);
 };
 
-const createContactFolder = async (clientid) => {
+const createContactFolder = async (PRIVATE_ACCESS_TOKEN, clientid) => {
   try {
     const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
     const FolderInput = { parentPath: "pdf", name: `${clientid}` };
@@ -233,7 +287,7 @@ const createContactFolder = async (clientid) => {
   }
 }
 
-const initCompany = async () => {
+const initCompany = async (PRIVATE_ACCESS_TOKEN) => {
   try {
     const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
     const FolderInput = { name: `pdf` };
@@ -259,18 +313,16 @@ const initCompany = async () => {
   }
 }
 
-const uploadFile = async (clientid, file) => {
-  let url = ""
+const uploadFile = async (PRIVATE_ACCESS_TOKEN, clientid, file, filename) => {
+  let url = {}
   try {
-    let filename = makeid(10) + ".pdf";
-    const myBuffer = Buffer.from('Hello, world!');
     const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
     //const fileInput = { parentPath: "pdf", name: `${clientid}` };
     const response = await hubspotClient.files.filesApi.upload(
       {
         data: file, //myBuffer,//fs.createReadStream('./photo.jpg'),
         name: filename
-      },
+      }, 
       undefined,
       `/pdf/${clientid}`,
       filename,
@@ -283,7 +335,9 @@ const uploadFile = async (clientid, file) => {
       })
     )
     console.log(JSON.stringify(response, null, 2));
-    url = _.get(response, "url")
+    url.url = _.get(response, "url")
+    url.file_id = _.get(response, "id")
+
   } catch (e) {
     e.message === 'HTTP request failed'
       ? console.error(JSON.stringify(e.response, null, 2))
@@ -293,18 +347,19 @@ const uploadFile = async (clientid, file) => {
   return url;
 }
 
-const getContactId = async (email) => {
+const getContactId = async (PRIVATE_ACCESS_TOKEN, email) => {
   console.log('=== Get contacts for HubSpot using the access token ===', email);
   let id = 0
   try {
     const hubspotClient = new hubspot.Client({ "accessToken": PRIVATE_ACCESS_TOKEN });
+    //const response = hubspotClient.crm.contacts.getAll()
     const response = await hubspotClient.apiRequest({
-      method: 'get',
-      path: '/crm/v3/objects/contacts/bhofman@ilionx.com?idProperty=email'
+      method: 'GET',
+      path: '/contacts/v1/contact/email/jasmine6@burch.nl/profile'
       //path: '/crm/v3/objects/contacts/' + email +"?idProperty=email",
     })
     console.log(JSON.stringify(response, null, 2));
-    id = _.get(response, "id") || 0
+    //id = _.get(response, "id") || 0
   } catch (e) {
     e.message === 'HTTP request failed'
       ? console.error(JSON.stringify(e.response, null, 2))
