@@ -1,5 +1,5 @@
 {
-  "repository": "https://github.com/michaeluno/web-page-dumper",
+  "repository": "https://github.com/evgeniynet/smartworkers-pdf-convert",
   "buildpacks": [
     {
       "url": "heroku/nodejs"
