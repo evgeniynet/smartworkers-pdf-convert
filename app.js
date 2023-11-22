@@ -109,13 +109,14 @@ app.get('/assign_pdf', async (req, res) => {
   let clientid = _.get(req, "query.vid")
   let email = _.get(req, "query.email")
   let template_url = _.get(req, "query.template")
-  const company_id= _.get(req, "query.company_id")
+  const company_id = _.get(req, "query.company_id")
+  const scale = _.get(req, "query.scale")
   const PRIVATE_ACCESS_TOKEN = TOKENS[company_id] || TOKENS["24267080"]
   if (PRIVATE_ACCESS_TOKEN) {
     const clientid = await getContact(PRIVATE_ACCESS_TOKEN, email)
     if (clientid > 0) {
       const folder = await createContactFolder(PRIVATE_ACCESS_TOKEN, clientid)
-      const file = await getPdf(template_url, email)
+      const file = await getPdf(template_url, email, scale)
 
       let t = new URL(template_url).pathname;
       t= t.substring(0)//, t.length - 10)
@@ -245,14 +246,15 @@ const getContact = async (PRIVATE_ACCESS_TOKEN, email) => {
   return id;
 };
 
-const getPdf = async (url, email) => {
+const getPdf = async (url, email, scale) => {
   console.log('=== Retrieving a pdf');
   let pdf;
+  scale = scale || "0.68"
   try {
     http://localhost:3000/www/?url=https://demohubspot.smartworkers.nl/pdf-template-test1700222658&output=pdf
     //http://localhost:3000/www/?url=https%3A%2F%2Fdemohubspot.smartworkers.nl%2Fpdf-template-test1700222658%3Fhs_preview%3DMEPmxTzR-145897991339%26email%3Dbhofman%2540ilionx.com&output=pdf
     console.log(`${SERVER_URL}/www/?output=pdf&url=` + encodeURIComponent(`${url}?email=${email}`));
-    const result = await request.get(`${SERVER_URL}/www/?output=pdf&url=` + encodeURIComponent(`${url}?email=${encodeURIComponent(email)}`), {
+    const result = await request.get(`${SERVER_URL}/www/?output=pdf&pdf[printBackground]=1&pdf[scale]=${scale}&url=` + encodeURIComponent(`${url}?email=${encodeURIComponent(email)}`), {
       encoding: null
       //headers: headers
     });
