@@ -1,4 +1,4 @@
-FROM node:18
+FROM node:16
 
 WORKDIR /usr/src/app
 
@@ -13,6 +13,6 @@ EXPOSE 8080
 
 CMD [ "node", "app.js" ]
 
-LABEL version="20240704"
+LABEL version="20240705"
 
 LABEL description="pdf-convert for Hubspot"
