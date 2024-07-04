@@ -1,0 +1,52 @@
+name: 🐳 Docker Image CI ACR
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+    
+    env:
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      ACR_REPOSITORY: ${{ secrets.ACR_REPOSITORY }}
+
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v4
+      
+    - name: Get next version 🚀
+      uses: reecetech/version-increment@2024.4.3
+      id: version
+      with:
+        scheme: semver
+        increment: patch
+    
+    #- run: git tag ${{ steps.version.outputs.version }}
+    #- run: git push origin ${{ steps.version.outputs.version }}
+        
+    - name: Login to Azure Container Registry 🔑
+      uses: azure/docker-login@v1
+      with:
+        login-server: ${{ env.ACR_NAME }}.azurecr.io
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+          
+    - name: Build and push 🛠️
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_REPOSITORY }}:${{ steps.version.outputs.version }}
+
+    - name: Build and push with latest tag 🏷️
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platform: linux/amd64
+        push: true
+        tags: ${{ env.ACR_NAME }}.azurecr.io/${{ env.ACR_REPOSITORY }}:latest
