@@ -14,7 +14,8 @@ jobs:
     env:
       ACR_NAME: ${{ secrets.ACR_NAME }}
       ACR_REPOSITORY: ${{ secrets.ACR_REPOSITORY }}
-
+      WEBSITES_PORT: 3000
+      PORT: 3000
     steps:
     - name: Check out the repo
       uses: actions/checkout@v4
