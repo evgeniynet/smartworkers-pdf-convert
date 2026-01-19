@@ -9,7 +9,7 @@ const getQueryFormatted = require( './getQueryFormatted' );
 
 const puppeteerExtra  = require( 'puppeteer-extra' );
 const pluginStealth   = require( 'puppeteer-extra-plugin-stealth' );
-const useProxy        = require( 'puppeteer-page-proxy' );
+const useProxy        = require( '@lem0-packages/puppeteer-page-proxy' );
 
 const Request_json    = require( './request/Request_json' );
 const Request_text    = require( './request/Request_text' );
