@@ -17,6 +17,6 @@ ENV PORT 3000
 
 CMD [ "yarn", "start" ]
 
-LABEL version="20240705"
+LABEL version="20260119"
 
 LABEL description="pdf-convert for Hubspot"
