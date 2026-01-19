@@ -5,50 +5,62 @@ module.exports = class Request_pdf extends Request_File {
 
   async do() {
 
-  // Render with screen media so the layout matches the viewport (responsive width)
-  await this.page.emulateMediaType('screen');
+    // For PDFs we want PRINT media rules (many sites have dedicated print styles that prevent cropping)
+    await this.page.emulateMediaType('print');
 
-  // Build PDF options from query
-  let pdfOptions = this._getPDFArguments(this.req.query.pdf);
+    // Build PDF options from query
+    let pdfOptions = this._getPDFArguments(this.req.query.pdf);
 
-  // Sensible defaults (do not override explicit query params)
-  pdfOptions.printBackground = (typeof pdfOptions.printBackground === 'undefined') ? true : pdfOptions.printBackground;
-  pdfOptions.preferCSSPageSize = (typeof pdfOptions.preferCSSPageSize === 'undefined') ? false : pdfOptions.preferCSSPageSize;
-  pdfOptions.margin = (typeof pdfOptions.margin === 'undefined')
-    ? { top: '0px', right: '0px', bottom: '0px', left: '0px' }
-    : pdfOptions.margin;
+    // Defaults (do not override explicit query params)
+    pdfOptions.printBackground = (typeof pdfOptions.printBackground === 'undefined') ? true : pdfOptions.printBackground;
 
-  // Ensure we do NOT accidentally force a single gigantic page height (which can get clipped).
-  // If neither `format` nor a complete `width`+`height` are provided, we create a multi-page PDF
-  // by setting the paper size to match the current viewport.
-  const vp = this.page.viewport();
+    // Prefer CSS @page size if the site provides it (avoids many "cropped PDF" cases)
+    pdfOptions.preferCSSPageSize = (typeof pdfOptions.preferCSSPageSize === 'undefined') ? true : pdfOptions.preferCSSPageSize;
 
-  // If caller did not request a specific paper format, use viewport-based paper size.
-  if (!pdfOptions.format) {
-    // Match the requested viewport width (e.g. 1280). Do not use document scrollWidth.
-    if (!pdfOptions.width) {
-      const w = (vp && vp.width) ? vp.width : 1280;
-      pdfOptions.width = `${w}px`;
+    // If caller enables header/footer, give Chrome some breathing room.
+    // Otherwise 0 margins are fine.
+    if (pdfOptions.displayHeaderFooter) {
+      pdfOptions.margin = (typeof pdfOptions.margin === 'undefined')
+        ? { top: '12mm', right: '0mm', bottom: '12mm', left: '0mm' }
+        : pdfOptions.margin;
+    } else {
+      pdfOptions.margin = (typeof pdfOptions.margin === 'undefined')
+        ? { top: '0px', right: '0px', bottom: '0px', left: '0px' }
+        : pdfOptions.margin;
     }
 
-    // IMPORTANT: If height is not specified, Chrome will use a default paper height (often leading to bottom clipping)
-    // when combined with a custom width. Force a reasonable page height to allow pagination.
-    if (!pdfOptions.height) {
-      const h = (vp && vp.height) ? vp.height : 800;
-      pdfOptions.height = `${h}px`;
-    }
+    // IMPORTANT:
+    // Do NOT force width/height by default.
+    // When you set both width and height, you are telling Chrome the paper size.
+    // If the site already defines @page or relies on default A4/Letter, overriding can cause clipping.
+    // Only use custom width/height when explicitly provided via query.
+
+    // Clean up known garbage text that sometimes appears at the end of the DELA PDF preview.
+    // (It shows up in the generated PDFs as repeated "word" and "mmMwWLliI0fiflO&1".)
+    await this.page.evaluate(() => {
+      const badToken = /mmMwWLliI0fiflO&1/g;
+      const repeatedWord = /^(?:\s*word\s+){20,}/i;
+
+      const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const v = node.nodeValue || '';
+        if (badToken.test(v) || repeatedWord.test(v.trim())) {
+          node.nodeValue = '';
+        }
+      }
+    });
+
+    // Never set `path` when returning the buffer
+    delete pdfOptions.path;
+
+    this.req.logger.debug('pdf options:', pdfOptions);
+
+    this.res.setHeader('Content-Disposition', 'filename="' + this.hostName + '.pdf"');
+    this.res.writeHead(200, { 'Content-Type': 'application/pdf' });
+    this.res.end(await this.page.pdf(pdfOptions), 'binary');
+
   }
-
-  // Never set `path` when returning the buffer
-  delete pdfOptions.path;
-
-  this.req.logger.debug('pdf options:', pdfOptions);
-
-  this.res.setHeader('Content-Disposition', 'filename="' + this.hostName + '.pdf"');
-  this.res.writeHead(200, { 'Content-Type': 'application/pdf' });
-  this.res.end(await this.page.pdf(pdfOptions), 'binary');
-
-}
 
     _getPDFArguments( queryPDF ) {
       if ( ! queryPDF ) {
