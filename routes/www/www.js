@@ -136,10 +136,26 @@ function _handleRequest( req, res, next ) {
     //   req.debug.log( await _response.fromCache() ? 'using cache:' : 'not using cache:', await _response.request().resourceType(), await _response.url() );
     // });
 
+    /*await page.addStyleTag({
+      content: `
+        html, body {
+          width: 1280px !important;
+          max-width: 1280px !important;
+          overflow: hidden !important;
+        }
+      `
+    });*/
+
     // Viewport - set_viewport is needed for a case that the user once set viewport options and then uncheck the Set view port check box.
     if ( req.query.set_viewport && req.query.viewport.width && req.query.viewport.height ) {
       await page.setViewport( req.query.viewport );
     }
+
+    await page.setViewport({
+      width: 1280,
+      height: 800, // любая
+      deviceScaleFactor: 1,
+    });
 
     // Additional HTTP headers.
     if ( req.query.headers.length ) {
@@ -502,7 +518,7 @@ function _handleRequest( req, res, next ) {
 
         req.logger.browser( 'Newly launching browser.' );
         let _argsMust = [
-          '--start-maximized', // Start in maximized state for screenshots // @see https://github.com/puppeteer/puppeteer/issues/1273#issuecomment-667646971
+          //'--start-maximized', // Start in maximized state for screenshots // @see https://github.com/puppeteer/puppeteer/issues/1273#issuecomment-667646971
           '--disk-cache-dir=' + _pathDirUserDataToday + path.sep + 'disk-cache',
           '--disable-background-networking',
           '--no-sandbox' // to run on Heroku @see https://elements.heroku.com/buildpacks/jontewks/puppeteer-heroku-buildpack
