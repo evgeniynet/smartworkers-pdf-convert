@@ -9,7 +9,7 @@ module.exports = class Request_debug extends Request_Image {
     let browser = this.page.browser();
     this.res.locals.systemInfo = {
       'node.js': this.req.app.get( 'config' ).system[ "node.js" ],
-      'Browser':( await this.page.userAgent() ).replace( 'Headless', '' ) + ' ' + ( await browser.version() ).replace( 'Headless', '' ),
+      'Browser':( await browser.userAgent() ).replace( 'Headless', '' ) + ' ' + ( await browser.version() ).replace( 'Headless', '' ),
     };
 
     let _config = this.req.app.get( 'config' );

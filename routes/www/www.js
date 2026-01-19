@@ -124,7 +124,7 @@ function _handleRequest( req, res, next ) {
     }
 
     // User Agent
-    await page.setUserAgent( req.query.user_agent || ( await page.userAgent() ).replace( 'Headless', '' ) );
+    await page.setUserAgent( req.query.user_agent || ( await browser.userAgent() ).replace( 'Headless', '' ) );
 
     // HTTP Basic Authentication
     if ( req.query.username ) {
