@@ -111,7 +111,8 @@ function _handleRequest( req, res, next ) {
     // Use cache
     req.logger.debug( 'Using cache: ' + ( req.query.cache ).toString() );
     await page.setCacheEnabled( req.query.cache );
-    await page._client.send( 'Network.setCacheDisabled', {  // @see https://github.com/puppeteer/puppeteer/issues/2497#issuecomment-509959074
+    const client = await page.target().createCDPSession();
+    await client.send('Network.setCacheDisabled', {  // @see https://github.com/puppeteer/puppeteer/issues/2497#issuecomment-509959074
       cacheDisabled: ! req.query.cache
     });
 
@@ -123,7 +124,7 @@ function _handleRequest( req, res, next ) {
     }
 
     // User Agent
-    await page.setUserAgent( req.query.user_agent || ( await browser.userAgent() ).replace( 'Headless', '' ) );
+    await page.setUserAgent( req.query.user_agent || ( await page.userAgent() ).replace( 'Headless', '' ) );
 
     // HTTP Basic Authentication
     if ( req.query.username ) {
@@ -146,7 +147,7 @@ function _handleRequest( req, res, next ) {
     }
 
     // Block resources
-    await page._client.send( 'Network.setBlockedURLs', { urls: _getBlockedResources( req.query.block.types, req.query.block.urls ) } );
+    await client.send( 'Network.setBlockedURLs', { urls: _getBlockedResources( req.query.block.types, req.query.block.urls ) } );
     if ( req.query.block.types.includes( 'script' ) ) {
       await page.setJavaScriptEnabled( false );
     }
