@@ -5,7 +5,7 @@ module.exports = {
   'project': {
     'name' : 'Web Page Dumper',
     'author': 'Michael Uno',
-    'url': 'https://github.com/michaeluno/web-page-dumper',
+    'url': 'https://github.com/michaeluno/web-page-dumper1',
     'licenseURL': 'http://opensource.org/licenses/mit-license.php',
   },
   'package': require( '../package.json' ),

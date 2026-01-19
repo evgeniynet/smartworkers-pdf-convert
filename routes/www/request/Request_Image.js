@@ -35,9 +35,9 @@ module.exports = class Request_Image extends Request_Base {
 
   // Keep whatever viewport was already set in www.js. If none was set, default to 1280x800.
   const currentViewport = this.page.viewport();
-  if (!currentViewport || !currentViewport.width || !currentViewport.height) {
+  //if (!currentViewport || !currentViewport.width || !currentViewport.height) {
     await this.page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
-  }
+  //}
 
   }
 

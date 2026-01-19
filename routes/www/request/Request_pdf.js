@@ -8,6 +8,12 @@ module.exports = class Request_pdf extends Request_File {
     // For PDFs we want PRINT media rules (many sites have dedicated print styles that prevent cropping)
     await this.page.emulateMediaType('print');
 
+    await this.page.setViewport({
+      width: 1280,
+      height: 800, // любая
+      deviceScaleFactor: 1,
+    });
+
     // Build PDF options from query
     let pdfOptions = this._getPDFArguments(this.req.query.pdf);
 

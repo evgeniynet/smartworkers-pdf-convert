@@ -1,8 +1,8 @@
 {
   "name": "web-page-dumper",
   "description": "Dumps web page outputs including JavaScript generated contents.",
-  "version": "1.10.1",
-  "url": "https://github.com/michaeluno/web-page-dumper",
+  "version": "1.10.2",
+  "url": "https://github.com/michaeluno/web-page-dumper1",
   "author": "Michael Uno <michael2@michaeluno.jp> (https://michaeluno.jp/)",
   "license": "MIT",
   "private": true,
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:michaeluno/web-page-dumper.git"
+    "url": "git@github.com:michaeluno/web-page-dumper1.git"
   },
   "scripts": {
     "dev": "nodemon node -e ejs,pug,js,css,html,jpg,png,scss --optimize_for_size --max_old_space_size=460 --gc_interval=100 bin/www",
