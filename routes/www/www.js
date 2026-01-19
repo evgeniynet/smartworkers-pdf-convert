@@ -124,7 +124,7 @@ function _handleRequest( req, res, next ) {
     }
 
     // User Agent
-    await page.setUserAgent( req.query.user_agent || ( await browser.userAgent() ).replace( 'Headless', '' ) );
+    await page.setUserAgent( req.query.user_agent || "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 YaBrowser/25.12.0.0 Safari/537.36" );
 
     // HTTP Basic Authentication
     if ( req.query.username ) {
@@ -136,7 +136,7 @@ function _handleRequest( req, res, next ) {
     //   req.debug.log( await _response.fromCache() ? 'using cache:' : 'not using cache:', await _response.request().resourceType(), await _response.url() );
     // });
 
-    await page.addStyleTag({
+    /*await page.addStyleTag({
       content: `
         html, body {
           width: 1280px !important;
@@ -144,7 +144,7 @@ function _handleRequest( req, res, next ) {
           overflow: hidden !important;
         }
       `
-    });
+    });*/
 
     // Viewport - set_viewport is needed for a case that the user once set viewport options and then uncheck the Set view port check box.
     if ( req.query.set_viewport && req.query.viewport.width && req.query.viewport.height ) {

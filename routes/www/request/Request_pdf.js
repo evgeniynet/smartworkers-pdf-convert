@@ -5,7 +5,14 @@ module.exports = class Request_pdf extends Request_File {
 
   async do() {
 
+    await this.page.emulateMediaType('screen');
     let _pdfOptions = this._getPDFArguments( this.req.query.pdf );
+    _pdfOptions.width = '1280px';        // фикс ширины
+  
+      pdfOptions.printBackground = pdfOptions.printBackground ?? true;
+  pdfOptions.preferCSSPageSize = pdfOptions.preferCSSPageSize ?? false;
+  pdfOptions.margin = pdfOptions.margin ?? { top: '0px', right: '0px', bottom: '0px', left: '0px' };
+
     console.log( 'pdf options:', _pdfOptions );
     this.res.setHeader('Content-Disposition','filename="' + this.hostName + '.pdf"' ); // set the file name.
     this.res.writeHead( 200, { 'Content-Type': 'application/pdf' } );

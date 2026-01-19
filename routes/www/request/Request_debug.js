@@ -21,18 +21,12 @@ module.exports = class Request_debug extends Request_Image {
       log: this.req.debug.entries
     };
     await this._autoScroll( this.page );
-    _debug.screenshot = await this.page.screenshot( {
-      // fullPage: true,
-      clip: {
-        x: 0,
-        y: 0,
-        width: await this.page.evaluate( () => document.body.scrollWidth ),
-        height: await this.page.evaluate( () => document.body.scrollHeight ),
-      },
-      type: 'jpeg',
-      quality: 60,
-      encoding: 'base64'
-    } );
+    _debug.screenshot = await this.page.screenshot({
+  fullPage: true,
+  type: 'jpeg',
+  quality: 60,
+  encoding: 'base64',
+});
     this.res.locals._debug = _debug; // avoid the key 'locals.debug' as it triggers express console outputs
     await this._setHeader();
     await this._setCookies( this.res );

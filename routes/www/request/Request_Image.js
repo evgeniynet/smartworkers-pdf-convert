@@ -11,13 +11,33 @@ module.exports = class Request_Image extends Request_Base {
    */
   async _initialize() {
 
-    this.bodyWidth   = await this.page.evaluate( () => document.body.scrollWidth );
-    this.bodyHeight  = await this.page.evaluate( () => document.body.scrollHeight );
-    this.req.logger.debug( 'Page document dimensions: ' + this.bodyWidth.toString() + ', ' + this.bodyHeight.toString() );
-    await this.page.setViewport( {
-      width:  this.bodyWidth,
-      height: this.bodyHeight
-    } );
+  // Document dimensions are NOT the same as viewport dimensions.
+  // We capture them for logging and for full-page capture height, but we do NOT resize the viewport to the document
+  // because that can explode the layout width (e.g. 4000px) and cause cropped PDFs/screenshots.
+  this.bodyWidth  = await this.page.evaluate(() => Math.max(
+    document.documentElement.scrollWidth,
+    document.body.scrollWidth,
+    document.documentElement.offsetWidth,
+    document.body.offsetWidth,
+    document.documentElement.clientWidth
+  ));
+  this.bodyHeight = await this.page.evaluate(() => Math.max(
+    document.documentElement.scrollHeight,
+    document.body.scrollHeight,
+    document.documentElement.offsetHeight,
+    document.body.offsetHeight,
+    document.documentElement.clientHeight
+  ));
+
+  this.req.logger.debug(
+    'Page document dimensions: ' + this.bodyWidth.toString() + ', ' + this.bodyHeight.toString()
+  );
+
+  // Keep whatever viewport was already set in www.js. If none was set, default to 1280x800.
+  const currentViewport = this.page.viewport();
+  if (!currentViewport || !currentViewport.width || !currentViewport.height) {
+    await this.page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+  }
 
   }
 
