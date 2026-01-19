@@ -15,8 +15,8 @@ module.exports = class Request_Image extends Request_Base {
     this.bodyHeight  = await this.page.evaluate( () => document.body.scrollHeight );
     this.req.logger.debug( 'Page document dimensions: ' + this.bodyWidth.toString() + ', ' + this.bodyHeight.toString() );
     await this.page.setViewport( {
-      width:  this.bodyWidth,
-      height: this.bodyHeight
+      width: 1280,
+      height: 800
     } );
 
   }
