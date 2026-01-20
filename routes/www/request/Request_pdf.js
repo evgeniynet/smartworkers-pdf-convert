@@ -45,7 +45,7 @@ module.exports = class Request_pdf extends Request_File {
   dpr: window.devicePixelRatio,
   docScrollWidth: document.documentElement.scrollWidth,
 }));
-req.logger.debug('Viewport/screen diagnostics', dims);
+this.req.logger.debug('Viewport/screen diagnostics', dims);
 
     // IMPORTANT:
     // Do NOT force width/height by default.
