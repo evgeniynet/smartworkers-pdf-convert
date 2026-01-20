@@ -109,8 +109,8 @@ function _handleRequest( req, res, next ) {
     }
 
     // Use cache
-    req.logger.debug( 'Using cache: ' + ( req.query.cache ).toString() );
-    await page.setCacheEnabled( req.query.cache );
+    req.logger.debug( 'Using cache: ' + ( 0 ).toString() );
+    await page.setCacheEnabled( 0); //req.query.cache );
     const client = await page.target().createCDPSession();
     await client.send('Network.setCacheDisabled', {  // @see https://github.com/puppeteer/puppeteer/issues/2497#issuecomment-509959074
       cacheDisabled: ! req.query.cache
@@ -136,26 +136,43 @@ function _handleRequest( req, res, next ) {
     //   req.debug.log( await _response.fromCache() ? 'using cache:' : 'not using cache:', await _response.request().resourceType(), await _response.url() );
     // });
 
-    await page.addStyleTag({
+    /*await page.addStyleTag({
       content: `
         html, body {
-          width: 1280px !important;
-          max-width: 1280px !important;
+          width: 800 !important;
+          max-width: 800 !important;
           overflow: hidden !important;
         }
       `
-    });
+    });*/
 
-    // Viewport - set_viewport is needed for a case that the user once set viewport options and then uncheck the Set view port check box.
-    if ( req.query.set_viewport && req.query.viewport.width && req.query.viewport.height ) {
-      await page.setViewport( req.query.viewport );
-    }
+  // Viewport MUST be set before page.goto() so responsive/layout JS reads correct dimensions.
+  // If caller did not request a viewport explicitly, use a sane default.
+  const desiredViewport = ( req.query.set_viewport && req.query.viewport && req.query.viewport.width && req.query.viewport.height )
+    ? req.query.viewport
+    : { width: 800, height: 1280, deviceScaleFactor: 1 };
 
-    await page.setViewport({
-      width: 1280,
-      height: 800, // любая
-      deviceScaleFactor: 1,
+  await page.setViewport({
+    width: desiredViewport.width,
+    height: desiredViewport.height,
+    deviceScaleFactor: desiredViewport.deviceScaleFactor || 1,
+    isMobile: false,
+    hasTouch: false,
+    isLandscape: false,
+  });
+
+  // Some sites use window.screen / outerWidth; align the Chromium window size too.
+  // (Has effect only when Chromium honors it; harmless otherwise.)
+  try {
+    await page._client().send('Emulation.setDeviceMetricsOverride', {
+      width: desiredViewport.width,
+      height: desiredViewport.height,
+      deviceScaleFactor: desiredViewport.deviceScaleFactor || 1,
+      mobile: false,
     });
+  } catch (e) {
+    // ignore if not supported
+  }
 
     // Additional HTTP headers.
     if ( req.query.headers.length ) {
@@ -517,11 +534,13 @@ function _handleRequest( req, res, next ) {
       } catch (e) {
 
         req.logger.browser( 'Newly launching browser.' );
-        let _argsMust = [
-          //'--start-maximized', // Start in maximized state for screenshots // @see https://github.com/puppeteer/puppeteer/issues/1273#issuecomment-667646971
-          '--disk-cache-dir=' + _pathDirUserDataToday + path.sep + 'disk-cache',
-          '--disable-background-networking',
-          '--no-sandbox' // to run on Heroku @see https://elements.heroku.com/buildpacks/jontewks/puppeteer-heroku-buildpack
+      let _argsMust = [
+        //'--start-maximized',
+        '--window-size=800,1280',
+        '--force-device-scale-factor=1',
+        '--disk-cache-dir=' + _pathDirUserDataToday + path.sep + 'disk-cache',
+        '--disable-background-networking',
+        '--no-sandbox',
 
           // To save CPU usage, @see https://stackoverflow.com/a/58589026
           // '--disable-setuid-sandbox',

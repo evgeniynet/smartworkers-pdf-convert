@@ -6,11 +6,14 @@ module.exports = class Request_pdf extends Request_File {
   async do() {
 
     // For PDFs we want PRINT media rules (many sites have dedicated print styles that prevent cropping)
-    await this.page.emulateMediaType('print');
-
+      // Media emulation: default to 'screen' because some templates have broken/overwide print CSS.
+  // Allow override via query: pdf[media]=print
+  const requestedMedia = (this.req.query.pdf && this.req.query.pdf.media) ? String(this.req.query.pdf.media).toLowerCase() : 'screen';
+  await this.page.emulateMediaType(requestedMedia === 'print' ? 'print' : 'screen');
+  
     await this.page.setViewport({
-      width: 1280,
-      height: 800, // любая
+      width: 800,
+      height: 1280, // любая
       deviceScaleFactor: 1,
     });
 
@@ -35,6 +38,15 @@ module.exports = class Request_pdf extends Request_File {
         : pdfOptions.margin;
     }
 
+    const dims = await this.page.evaluate(() => ({
+  innerWidth: window.innerWidth,
+  outerWidth: window.outerWidth,
+  screenWidth: window.screen.width,
+  dpr: window.devicePixelRatio,
+  docScrollWidth: document.documentElement.scrollWidth,
+}));
+req.logger.debug('Viewport/screen diagnostics', dims);
+
     // IMPORTANT:
     // Do NOT force width/height by default.
     // When you set both width and height, you are telling Chrome the paper size.
@@ -43,19 +55,74 @@ module.exports = class Request_pdf extends Request_File {
 
     // Clean up known garbage text that sometimes appears at the end of the DELA PDF preview.
     // (It shows up in the generated PDFs as repeated "word" and "mmMwWLliI0fiflO&1".)
-    await this.page.evaluate(() => {
-      const badToken = /mmMwWLliI0fiflO&1/g;
-      const repeatedWord = /^(?:\s*word\s+){20,}/i;
+      // Clean up known garbage text that sometimes appears in the DELA PDF preview.
+  // It may show up as plain text nodes, inside form values, or duplicated in HTML.
+  await this.page.evaluate(() => {
+    const TOKEN = 'mmMwWLliI0fiflO&1';
+    const tokenRe = new RegExp(TOKEN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    const repeatedWord = /^(?:\s*word\s+){10,}/i;
 
-      const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+    const root = document.body || document.documentElement;
+    if (!root) return;
+
+    // 1) Fast path: strip from body HTML (covers many cases where it is embedded in markup)
+    try {
+      if (root.innerHTML && root.innerHTML.includes(TOKEN)) {
+        root.innerHTML = root.innerHTML.replace(tokenRe, '');
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // 2) Walk text nodes (covers cases where it is plain text)
+    try {
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode())) {
         const v = node.nodeValue || '';
-        if (badToken.test(v) || repeatedWord.test(v.trim())) {
+        const trimmed = v.trim();
+        if (!v) continue;
+        if (v.includes(TOKEN)) {
+          node.nodeValue = v.replace(tokenRe, '');
+          continue;
+        }
+        if (repeatedWord.test(trimmed)) {
           node.nodeValue = '';
         }
       }
-    });
+    } catch (e) {
+      // ignore
+    }
+
+    // 3) Strip from common value-bearing attributes (inputs/textareas)
+    try {
+      const valueNodes = root.querySelectorAll('input, textarea');
+      valueNodes.forEach(el => {
+        if (typeof el.value === 'string' && el.value.includes(TOKEN)) {
+          el.value = el.value.replace(tokenRe, '');
+        }
+        if (typeof el.defaultValue === 'string' && el.defaultValue.includes(TOKEN)) {
+          el.defaultValue = el.defaultValue.replace(tokenRe, '');
+        }
+      });
+    } catch (e) {
+      // ignore
+    }
+
+    // 4) Strip from some attributes where it sometimes leaks
+    try {
+      const all = root.querySelectorAll('*');
+      all.forEach(el => {
+        for (const attr of Array.from(el.attributes || [])) {
+          if (typeof attr.value === 'string' && attr.value.includes(TOKEN)) {
+            el.setAttribute(attr.name, attr.value.replace(tokenRe, ''));
+          }
+        }
+      });
+    } catch (e) {
+      // ignore
+    }
+  });
 
     // Never set `path` when returning the buffer
     delete pdfOptions.path;
