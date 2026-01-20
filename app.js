@@ -249,7 +249,7 @@ const getContact = async (PRIVATE_ACCESS_TOKEN, email) => {
 const getPdf = async (url, email, scale) => {
   console.log('=== Retrieving a pdf');
   let pdf;
-  scale = scale || "1"
+  scale = scale || "0.85"
   try {
     http://localhost:3000/www/?url=https://demohubspot.smartworkers.nl/pdf-template-test1700222658&output=pdf
     //http://localhost:3000/www/?url=https%3A%2F%2Fdemohubspot.smartworkers.nl%2Fpdf-template-test1700222658%3Fhs_preview%3DMEPmxTzR-145897991339%26email%3Dbhofman%2540ilionx.com&output=pdf
