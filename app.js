@@ -254,7 +254,7 @@ const getPdf = async (url, email, scale) => {
     http://localhost:3000/www/?url=https://demohubspot.smartworkers.nl/pdf-template-test1700222658&output=pdf
     //http://localhost:3000/www/?url=https%3A%2F%2Fdemohubspot.smartworkers.nl%2Fpdf-template-test1700222658%3Fhs_preview%3DMEPmxTzR-145897991339%26email%3Dbhofman%2540ilionx.com&output=pdf
     console.log(`${SERVER_URL}/www/?cache=0&output=pdf&pdf[printBackground]=1&pdf[scale]=${scale}&url=` + encodeURIComponent(`${url}?email=${encodeURIComponent(email)}`));
-    const result = await request.get(`${SERVER_URL}/www/?cache=0&output=pdf&pdf[printBackground]=1&pdf[scale]=${scale}&url=` + encodeURIComponent(`${url}?email=${encodeURIComponent(email)}`), {
+    const result = await request.get(`${SERVER_URL}/www/?cache=0&output=pdf&pdf[printBackground]=1&pdf[scale]=${scale}&url=` + encodeURIComponent(`${url}?pr=true&email=${encodeURIComponent(email)}`), {
       encoding: null
       //headers: headers
     });
